@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Player • Infinity</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell" style="width:100%">
+    <div class="topbar" aria-hidden="true"></div>
+
+    <header>
+      <div class="header-inner">
+        <button class="icon-btn" onclick="history.back()" aria-label="Voltar">←</button>
+        <div class="brand" aria-label="Infinity"><span>INFINITY</span></div>
+        <div style="width:40px"></div>
+      </div>
+    </header>
+
+    <main class="page">
+      <h2 id="title">Carregando...</h2>
+
+      <div class="card" style="min-width:auto;">
+        <div class="poster" style="height:220px; display:grid; place-items:center;">
+          <span style="opacity:.85; font-weight:900;">PLAYER</span>
+        </div>
+
+        <div class="card-body">
+          <video id="video" controls playsinline
+                 style="width:100%; border-radius:16px; background:#000;"></video>
+          <p class="muted" id="desc"></p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { MOVIES } from "./data.js";
+
+    const params = new URLSearchParams(location.search);
+    const id = params.get("id") || "default";
+    const movie = MOVIES.find(m => m.id === id) || MOVIES[0];
+
+    const titleEl = document.getElementById("title");
+    const descEl  = document.getElementById("desc");
+    const video   = document.getElementById("video");
+
+    titleEl.textContent = movie.title || "Sem título";
+    descEl.textContent  = movie.description || movie.desc || "";
+
+    // vídeo (coloque sample.mp4 na pasta do site, ou troque em data.js)
+    video.src = movie.videoSrc || "sample.mp4";
+// ===== PROGRESSO (CONTINUAR ASSISTINDO) =====
+const STORE_KEY = "infinity_progress_v1";
+
+function loadProgress(){
+  return JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+}
+function saveProgress(id, payload){
+  const all = loadProgress();
+  all[id] = payload;
+  localStorage.setItem(STORE_KEY, JSON.stringify(all));
+}
+
+// quando o vídeo carregar metadata (duração disponível)
+video.addEventListener("loadedmetadata", () => {
+  const all = loadProgress();
+  const saved = all[id];
+  if(saved && typeof saved.t === "number" && saved.t > 0){
+    // volta do tempo salvo
+    video.currentTime = Math.min(saved.t, (video.duration || saved.dur || saved.t));
+  }
+});
+
+// salva a cada 3 segundos enquanto estiver tocando
+let tick = null;
+video.addEventListener("play", () => {
+  if(tick) return;
+  tick = setInterval(() => {
+    if(!id) return;
+    saveProgress(id, {
+      t: video.currentTime || 0,
+      dur: video.duration || 0,
+      title: movie?.title || movie?.name || "Vídeo",
+      updatedAt: Date.now()
+    });
+  }, 3000);
+});
+
+video.addEventListener("pause", () => {
+  if(tick){ clearInterval(tick); tick = null; }
+  if(!id) return;
+  saveProgress(id, {
+    t: video.currentTime || 0,
+    dur: video.duration || 0,
+    title: movie?.title || movie?.name || "Vídeo",
+    updatedAt: Date.now()
+  });
+});
+
+// ao sair da página também salva
+window.addEventListener("beforeunload", () => {
+  if(!id) return;
+  saveProgress(id, {
+    t: video.currentTime || 0,
+    dur: video.duration || 0,
+    title: movie?.title || movie?.name || "Vídeo",
+    updatedAt: Date.now()
+  });
+});
+    // ===== CONTINUAR ASSISTINDO (localStorage) =====
+    const KEY = "infinity_progress_v1";
+
+    // carrega o tempo salvo quando o vídeo estiver pronto
+    video.addEventListener("loadedmetadata", () => {
+      const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+      if (saved[id]?.t) {
+        const safeTime = Math.min(saved[id].t, Math.max(0, (video.duration || 0) - 1));
+        video.currentTime = safeTime;
+      }
+    });
+
+    // salva a cada 3s
+    let lastSave = 0;
+    video.addEventListener("timeupdate", () => {
+      const now = Date.now();
+      if (now - lastSave < 3000) return;
+      lastSave = now;
+
+      const data = JSON.parse(localStorage.getItem(KEY) || "{}");
+      data[id] = {
+        t: video.currentTime,
+        dur: video.duration || 0,
+        title: movie.title,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(KEY, JSON.stringify(data));
+    });
+  </script>
+</body>
+</html>
